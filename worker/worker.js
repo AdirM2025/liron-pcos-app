@@ -95,6 +95,23 @@ const PERSONA_INSTRUCTIONS = `
 - תמיד לסיים משפט עד הסוף. עדיף תשובה קצרה יותר אבל שלמה, מאשר תשובה ארוכה שנקטעת.
 `;
 
+// קריאה אחת ל-Gemini. useSearch=true מוסיפה חיפוש חי בגוגל (grounding); אם זה נכשל
+// (לדוגמה מגבלת שימוש זמנית על החיפוש), נופלים חזרה לקריאה בלי חיפוש - עדיף תשובה
+// טובה מהידע הקבוע מאשר שגיאה.
+async function callGemini(env, userMessage, useSearch) {
+  const requestBody = {
+    systemInstruction: { parts: [{ text: PERSONA_INSTRUCTIONS + "\n\n" + KNOWLEDGE_BASE }] },
+    contents: [{ role: "user", parts: [{ text: userMessage }] }],
+    generationConfig: { maxOutputTokens: 1000, temperature: 0.7 },
+  };
+  if (useSearch) requestBody.tools = [{ google_search: {} }];
+  return fetch(`${GEMINI_URL}?key=${env.GEMINI_API_KEY}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(requestBody),
+  });
+}
+
 export default {
   async fetch(request, env) {
     const origin = request.headers.get("Origin") || "";
@@ -126,21 +143,11 @@ export default {
         ? `נתונים נלווים על המצב הנוכחי של לירון (JSON): ${JSON.stringify(context)}\n\nהשאלה או הבקשה של לירון: "${prompt}"`
         : prompt;
 
-      const geminiRes = await fetch(`${GEMINI_URL}?key=${env.GEMINI_API_KEY}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          systemInstruction: {
-            parts: [{ text: PERSONA_INSTRUCTIONS + "\n\n" + KNOWLEDGE_BASE }],
-          },
-          contents: [{ role: "user", parts: [{ text: userMessage }] }],
-          tools: [{ google_search: {} }],
-          generationConfig: {
-            maxOutputTokens: 1000,
-            temperature: 0.7,
-          },
-        }),
-      });
+      let geminiRes = await callGemini(env, userMessage, true);
+      if (!geminiRes.ok) {
+        console.error("Gemini grounded call failed, retrying without live search:", geminiRes.status);
+        geminiRes = await callGemini(env, userMessage, false);
+      }
 
       if (!geminiRes.ok) {
         const errText = await geminiRes.text();
@@ -154,8 +161,9 @@ export default {
       const data = await geminiRes.json();
       let text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
 
-      // ניקוי בטיחות: הסרת סימני markdown למקרה שהמודל בכל זאת הוסיף כאלה
-      text = text.replace(/\*\*/g, "").replace(/[#*_`]/g, "").trim();
+      // ניקוי בטיחות: הסרת סימני markdown, ותווים משפות אחרות שלפעמים "מתערבבים" בטעות (באג נדיר של המודל)
+      text = text.replace(/\*\*/g, "").replace(/[#*_`]/g, "");
+      text = text.replace(/[Ѐ-ӿ؀-ۿ]/g, "").replace(/\s{2,}/g, " ").trim();
 
       if (!text) {
         text = "לא הצלחתי לנסח תשובה כרגע, נסי לשאול שוב במילים קצת אחרות.";

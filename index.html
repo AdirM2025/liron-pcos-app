@@ -197,6 +197,14 @@
       </div>
       <div class="weekcount" id="weekCount">0/2 אימוני כוח השבוע</div>
       <div class="divider"></div>
+      <div style="display:flex; align-items:center; justify-content:space-between;">
+        <span class="small-muted">צעדים היום</span>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <input type="number" id="stepsInput" placeholder="0" style="width:90px; text-align:center;">
+          <button class="secondary" id="stepsSave" style="padding:8px 12px;">שמירה</button>
+        </div>
+      </div>
+      <div class="divider"></div>
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
         <span class="small-muted">מים היום — יחידה מועדפת</span>
         <div style="display:flex; gap:6px;">
@@ -219,7 +227,10 @@
   <!-- CHAT -->
   <div class="page" id="page-chat">
     <div class="card">
-      <h2>שאלי אותי — צ'אט מותאם אישית 💬</h2>
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+        <h2 style="margin:0;">שאלי אותי — צ'אט מותאם אישית 💬</h2>
+        <button class="ghost" id="clearChatBtn" style="padding:5px 10px; font-size:11px;">🗑 ניקוי צ'אט</button>
+      </div>
       <div class="chip-row">
         <button class="prompt-chip" data-p="מה כדאי לי לאכול עכשיו, בהתאם למה שכבר אכלתי היום?">מה לאכול עכשיו?</button>
         <button class="prompt-chip" data-p="יש לי חשק חזק למתוק ואני לא בטוחה אם השוקולד היומי שלי כבר נגמר. מה אני עושה?">חשק למתוק 🍫</button>
@@ -372,12 +383,30 @@
       </select>
     </div>
     <div class="field">
+      <label>או קלוריות מדויקות (אם ידוע לך — לא חובה, גובר על הבחירה למעלה)</label>
+      <input type="number" id="customKcalExact" placeholder="למשל 320">
+    </div>
+    <div class="field">
+      <label>חלבון בגרמים (לא חובה)</label>
+      <input type="number" id="customProtein" placeholder="למשל 20">
+    </div>
+    <div class="field">
       <label>זה בעיקר...</label>
       <select id="customCat">
         <option value="green">ירקות / חלבון</option>
         <option value="yellow">פחמימה / שומן</option>
         <option value="treat">פינוק לא מתוכנן</option>
         <option value="choco">שוקולד</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>לאיזו ארוחה?</label>
+      <select id="customMeal">
+        <option value="">לפי השעה (אוטומטי)</option>
+        <option value="breakfast">בוקר</option>
+        <option value="lunch">צהריים</option>
+        <option value="dinner">ערב</option>
+        <option value="snack">נשנוש</option>
       </select>
     </div>
     <button class="primary" id="customSave">הוספה ליומן</button>
@@ -442,6 +471,7 @@
       checklist:{},
       exercise:{},
       water:{},
+      steps:{},
       checkins:[],
       chat:[],
       streak:{ lastDate:null, count:0 }
@@ -463,6 +493,8 @@
     if(!state.checklist[key]) state.checklist[key] = { veg:false, protein:false, carb:false, choco:false };
     if(!state.exercise[key]) state.exercise[key] = { strength:false, walk:false };
     if(state.water[key] === undefined) state.water[key] = 0;
+    if(!state.steps) state.steps = {};
+    if(state.steps[key] === undefined) state.steps[key] = 0;
   }
 
   // ---------- FOOD DB ----------
@@ -605,6 +637,7 @@
     renderLogList(key);
     renderExercise(key);
     renderWater(key);
+    renderSteps(key);
   }
 
   function renderLogList(key){
@@ -675,20 +708,48 @@
   }
 
   // ---------- SUGGESTED MENU (סינון פשוט לפי העדפות, בלי AI) ----------
+  // לארוחות עיקריות בונים "צלחת" אמיתית: ירק/חלבון + פחמימה + שומן, לא פריט בודד אקראי.
+  function pickRandom(list){ return list.length ? list[Math.floor(Math.random()*list.length)] : null; }
+
   function suggestMenu(){
-    const order = ['breakfast','lunch','dinner','snack'];
     const all = Object.values(FOOD_DB).flat();
-    const rows = order.map(m=>{
-      const opts = all.filter(f=> f.meals && f.meals.includes(m) && passesPrefs(f));
-      if(opts.length===0) return '';
-      const pick = opts[Math.floor(Math.random()*opts.length)];
-      return `<div class="log-item">
-        <span><b>${MEAL_LABELS[m]}</b> — ${pick.n} <span class="small-muted">· ${pick.k} קק"ל</span></span>
-        <button class="ghost menu-add" data-n="${pick.n}" data-k="${pick.k}" data-p="${pick.p}" data-meal="${m}">+ הוספה</button>
-      </div>`;
+    const byMeal = (m) => all.filter(f=> f.meals && f.meals.includes(m) && passesPrefs(f));
+    const withTag = (list, tag) => list.filter(f=> f.sat && f.sat.includes(tag));
+    const withGrp = (list, grp) => list.filter(f=> f.grp===grp);
+
+    function planFor(m){
+      const pool = byMeal(m);
+      if(m === 'snack'){
+        const item = pickRandom(pool);
+        return item ? [item] : [];
+      }
+      const proteinPool = withTag(pool,'protein').length ? withTag(pool,'protein') : withTag(pool,'veg');
+      const protein = pickRandom(proteinPool);
+      const carb = pickRandom(withTag(pool,'carb'));
+      const parts = [protein, carb].filter(Boolean);
+      if(m === 'lunch' || m === 'dinner'){
+        const veg = pickRandom(withTag(pool,'veg').filter(f=>f!==protein));
+        const fat = pickRandom(withGrp(pool,'fat'));
+        if(veg) parts.unshift(veg);
+        if(fat) parts.push(fat);
+      }
+      const seen = new Set();
+      return parts.filter(f=>{ if(!f || seen.has(f.n)) return false; seen.add(f.n); return true; });
+    }
+
+    const order = ['breakfast','lunch','dinner','snack'];
+    const html = order.map(m=>{
+      const items = planFor(m);
+      if(items.length===0) return '';
+      const rows = items.map(f=>`
+        <div class="log-item">
+          <span>${f.n} <span class="small-muted">· ${f.k} קק"ל</span></span>
+          <button class="ghost menu-add" data-n="${f.n}" data-k="${f.k}" data-p="${f.p}" data-meal="${m}">+ הוספה</button>
+        </div>`).join('');
+      return `<div class="small-muted" style="font-weight:700; margin:8px 0 2px;">${MEAL_LABELS[m]}</div>${rows}`;
     }).join('');
     const el = document.getElementById('menuSuggestList');
-    el.innerHTML = rows || '<div class="empty">כרגע אין הצעות שעוברות את ההעדפות שלך — נסי להסיר סינון בהגדרות.</div>';
+    el.innerHTML = html || '<div class="empty">כרגע אין מספיק הצעות שעוברות את ההעדפות שלך — נסי להסיר סינון בהגדרות.</div>';
     el.querySelectorAll('.menu-add').forEach(btn=>{
       btn.onclick = ()=> addFood(btn.dataset.n, parseInt(btn.dataset.k,10), parseInt(btn.dataset.p,10), [], btn.dataset.meal);
     });
@@ -742,17 +803,35 @@
     };
   });
 
+  // ---------- STEPS ----------
+  function renderSteps(key){
+    document.getElementById('stepsInput').value = state.steps[key] || '';
+  }
+  document.getElementById('stepsSave').onclick = ()=>{
+    const key = todayKey(); ensureDay(key);
+    const val = parseInt(document.getElementById('stepsInput').value, 10);
+    state.steps[key] = (!isNaN(val) && val>=0) ? val : 0;
+    save(); renderSteps(key);
+  };
+
   // ---------- CUSTOM MODAL ----------
   const customModal = document.getElementById('customModal');
   document.getElementById('openCustom').onclick = ()=> customModal.classList.add('show');
   document.getElementById('customCancel').onclick = ()=> customModal.classList.remove('show');
   document.getElementById('customSave').onclick = ()=>{
     const name = document.getElementById('customName').value.trim() || 'מנה מותאמת';
-    const kcal = parseInt(document.getElementById('customSize').value,10);
+    const exactKcal = parseInt(document.getElementById('customKcalExact').value,10);
+    const kcal = !isNaN(exactKcal) && exactKcal>0 ? exactKcal : parseInt(document.getElementById('customSize').value,10);
+    const exactProtein = parseInt(document.getElementById('customProtein').value,10);
     const cat = document.getElementById('customCat').value;
     const satMap = { green:['veg','protein'], yellow:['carb'], treat:[], choco:['choco'] };
-    addFood(name, kcal, cat==='green'?12:0, satMap[cat]);
+    const protein = !isNaN(exactProtein) && exactProtein>=0 ? exactProtein : (cat==='green'?12:0);
+    const mealVal = document.getElementById('customMeal').value || null;
+    addFood(name, kcal, protein, satMap[cat], mealVal);
     document.getElementById('customName').value='';
+    document.getElementById('customKcalExact').value='';
+    document.getElementById('customProtein').value='';
+    document.getElementById('customMeal').value='';
     customModal.classList.remove('show');
   };
 
@@ -766,11 +845,12 @@
   function buildLearningProfile(){
     const dates = Object.keys(state.logs).sort();
     const last7 = dates.slice(-7);
-    let totalK=0, activeDays=0, totalWaterMl=0, waterDaysCount=0;
+    let totalK=0, activeDays=0, totalWaterMl=0, waterDaysCount=0, totalSteps=0, stepsDaysCount=0;
     last7.forEach(k=>{
       const items = state.logs[k]||[];
       if(items.length){ activeDays++; totalK += items.reduce((s,i)=>s+i.k,0); }
       if(state.water[k]!==undefined && state.water[k]>0){ totalWaterMl += state.water[k]; waterDaysCount++; }
+      if(state.steps && state.steps[k]){ totalSteps += state.steps[k]; stepsDaysCount++; }
     });
     const strengthLast7 = last7.filter(k=>state.exercise[k]&&state.exercise[k].strength).length;
     const walkLast7 = last7.filter(k=>state.exercise[k]&&state.exercise[k].walk).length;
@@ -784,6 +864,7 @@
       daysLoggedLast7: activeDays,
       avgDailyCaloriesLast7: activeDays ? Math.round(totalK/activeDays) : null,
       avgWaterMlOnLoggedDays: waterDaysCount ? Math.round(totalWaterMl/waterDaysCount) : null,
+      avgStepsOnLoggedDays: stepsDaysCount ? Math.round(totalSteps/stepsDaysCount) : null,
       strengthWorkoutsLast7Days: strengthLast7,
       walksLast7Days: walkLast7,
       weightTrendSinceTrackingStarted: weightTrend,
@@ -838,6 +919,12 @@
   document.querySelectorAll('.prompt-chip').forEach(chip=>{
     chip.onclick = ()=> sendChat(chip.dataset.p);
   });
+  document.getElementById('clearChatBtn').onclick = ()=>{
+    if(confirm('לנקות את כל היסטוריית הצ׳אט? זה לא ניתן לביטול.')){
+      state.chat = [{role:'ai', text:'היי לירון! אני כאן בשבילך — תשאלי אותי כל דבר על האוכל, החשקים, או פשוט תבקשי מוטיבציה 💗'}];
+      save(); renderChat();
+    }
+  };
 
   // ---------- CHECK-IN ----------
   const checkinModal = document.getElementById('checkinModal');
