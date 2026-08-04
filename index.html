@@ -812,15 +812,16 @@
       const item = pickRandom(pool);
       return item ? [item] : [];
     }
+    // ארוחה עיקרית (בוקר/צהריים/ערב) - צלחת הגיונית ותקנית: חלבון + פחמימה + שומן,
+    // תמיד שלושת המרכיבים יחד, לא רק חלק מהם. בצהריים/ערב מוסיפים גם ירק כמרכיב חמישי.
     const proteinPool = withTag(pool,'protein').length ? withTag(pool,'protein') : withTag(pool,'veg');
     const protein = pickRandom(proteinPool);
     const carb = pickRandom(withTag(pool,'carb'));
-    const parts = [protein, carb].filter(Boolean);
+    const fat = pickRandom(withGrp(pool,'fat'));
+    const parts = [protein, carb, fat].filter(Boolean);
     if(m === 'lunch' || m === 'dinner'){
       const veg = pickRandom(withTag(pool,'veg').filter(f=>f!==protein));
-      const fat = pickRandom(withGrp(pool,'fat'));
       if(veg) parts.unshift(veg);
-      if(fat) parts.push(fat);
     }
     const seen = new Set();
     return parts.filter(f=>{ if(!f || seen.has(f.n)) return false; seen.add(f.n); return true; });
