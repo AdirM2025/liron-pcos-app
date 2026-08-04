@@ -174,12 +174,19 @@
 
     <div class="card">
       <h2>הוספת אוכל מהירה <span class="muted">— בלי לשקול כלום</span></h2>
+      <div class="cat-tabs" id="mealTabs"></div>
       <div class="cat-tabs" id="catTabs"></div>
       <div class="food-grid" id="foodGrid"></div>
       <div style="margin-top:10px;">
         <button class="secondary" style="width:100%" id="openCustom">+ הוספה מותאמת אישית</button>
       </div>
       <div class="log-list" id="logList"></div>
+    </div>
+
+    <div class="card">
+      <h2>התפריט המוצע להיום 🍽 <span class="muted">— לפי ההעדפות שלך</span></h2>
+      <div id="menuSuggestList"></div>
+      <button class="secondary" style="width:100%; margin-top:8px;" id="reshuffleMenu">🔀 הצעות חדשות</button>
     </div>
 
     <div class="card">
@@ -190,11 +197,18 @@
       </div>
       <div class="weekcount" id="weekCount">0/2 אימוני כוח השבוע</div>
       <div class="divider"></div>
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+        <span class="small-muted">מים היום — יחידה מועדפת</span>
+        <div style="display:flex; gap:6px;">
+          <button class="cat-chip water-unit-chip" data-unit="cup" id="waterUnitCup">כוס · 250 מ"ל</button>
+          <button class="cat-chip water-unit-chip" data-unit="bottle" id="waterUnitBottle">בקבוק · 500 מ"ל</button>
+        </div>
+      </div>
       <div style="display:flex; align-items:center; justify-content:space-between;">
-        <span class="small-muted">מים היום</span>
+        <span class="small-muted" id="waterGoalTxt">יעד: 2.0 ליטר</span>
         <div style="display:flex; align-items:center; gap:10px;">
           <button class="ghost" id="waterMinus">－</button>
-          <b id="waterCount">0</b><span class="small-muted">/8 כוסות</span>
+          <b id="waterCount">0</b><span class="small-muted">ליטר</span>
           <button class="ghost" id="waterPlus">＋</button>
         </div>
       </div>
@@ -324,6 +338,16 @@
     </div>
 
     <div class="card">
+      <h2>העדפות אוכל 🍽 <span class="muted">— משפיע על ההצעות והתפריט</span></h2>
+      <p class="small-muted" style="margin-top:-4px;">סמני מה פחות מתאים לך — נסנן את זה מההצעות. אין חובה לסמן כלום.</p>
+      <div class="chip-row" id="dislikeChips"></div>
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-top:6px;">
+        <label style="margin:0;">רק הצעות מהירות להכנה (עד 10 דק')</label>
+        <input type="checkbox" id="setQuickOnly" style="width:auto;">
+      </div>
+    </div>
+
+    <div class="card">
       <h2>ניהול נתונים</h2>
       <button class="ghost" id="clearToday" style="width:100%; margin-bottom:8px;">איפוס יומן היום</button>
       <button class="ghost" id="clearAll" style="width:100%; color:var(--red); border-color:var(--red-bg);">מחיקת כל הנתונים והתחלה מחדש</button>
@@ -413,7 +437,7 @@
 
   function defaultState(){
     return {
-      profile:{ name:"לירון ממו", weight:77, height:155, age:27, activity:1.375, deficit:400 },
+      profile:{ name:"לירון ממו", weight:77, height:155, age:27, activity:1.375, deficit:400, waterUnit:'cup', prefs:{ dislikes:[], quickOnly:false } },
       logs:{},
       checklist:{},
       exercise:{},
@@ -442,52 +466,71 @@
   }
 
   // ---------- FOOD DB ----------
+  // כל פריט: n=שם, k=קלוריות, p=חלבון, sat=מה זה מסמן בצלחת, meals=לאילו ארוחות מתאים,
+  // grp=קבוצה לצורך סינון העדפות/רגישויות, prep=זמן הכנה משוער בדקות (למי שרוצה רק מהיר)
   const FOOD_DB = {
     green: [
-      {n:"קערת ירקות חתוכים (2 כוסות)", k:50, p:2, sat:['veg']},
-      {n:"סלט ירקות גדול (3 כוסות, בלי רוטב שמן)", k:70, p:2, sat:['veg']},
-      {n:"מרק ירקות (כוס)", k:80, p:3, sat:['veg']},
-      {n:"2 ביצים קשות", k:140, p:12, sat:['protein']},
-      {n:"2 ביצים מטוגנות בשמן", k:180, p:12, sat:['protein']},
-      {n:"שקשוקה (2 ביצים + כוס רוטב עגבניות)", k:250, p:14, sat:['protein','veg']},
-      {n:"חזה עוף בגריל (חצי חזה בינוני, מבושל)", k:150, p:28, sat:['protein']},
-      {n:"הודו טחון מוקפץ (כוס, מבושל)", k:230, p:29, sat:['protein']},
-      {n:"סלמון אפוי (פרוסה בינונית, מבושל)", k:250, p:25, sat:['protein']},
-      {n:"דג לבן - דניס/בקלה (פרוסה בינונית, מבושל)", k:120, p:24, sat:['protein']},
-      {n:"טונה משומרת במים (קופסה מסוננת)", k:130, p:29, sat:['protein']},
-      {n:"קוטג'/גבינה לבנה 5% (כוס)", k:200, p:25, sat:['protein']},
-      {n:"יוגורט יווני טבעי 5% (כוס)", k:220, p:20, sat:['protein']},
-      {n:"טופו מוקפץ (כוס קוביות)", k:120, p:12, sat:['protein']},
+      {n:"קערת ירקות חתוכים (2 כוסות)", k:50, p:2, sat:['veg'], meals:['lunch','dinner','snack'], grp:'veg', prep:5},
+      {n:"סלט ירקות גדול (3 כוסות, בלי רוטב שמן)", k:70, p:2, sat:['veg'], meals:['lunch','dinner'], grp:'veg', prep:10},
+      {n:"מרק ירקות (כוס)", k:80, p:3, sat:['veg'], meals:['lunch','dinner'], grp:'veg', prep:15},
+      {n:"2 ביצים קשות", k:140, p:12, sat:['protein'], meals:['breakfast','lunch','snack'], grp:'egg', prep:10},
+      {n:"2 ביצים מטוגנות בשמן", k:180, p:12, sat:['protein'], meals:['breakfast'], grp:'egg', prep:8},
+      {n:"שקשוקה (2 ביצים + כוס רוטב עגבניות)", k:250, p:14, sat:['protein','veg'], meals:['breakfast','dinner'], grp:'egg', prep:15},
+      {n:"חזה עוף בגריל (חצי חזה בינוני, מבושל)", k:150, p:28, sat:['protein'], meals:['lunch','dinner'], grp:'meat', prep:20},
+      {n:"הודו טחון מוקפץ (כוס, מבושל)", k:230, p:29, sat:['protein'], meals:['lunch','dinner'], grp:'meat', prep:20},
+      {n:"סלמון אפוי (פרוסה בינונית, מבושל)", k:250, p:25, sat:['protein'], meals:['lunch','dinner'], grp:'fish', prep:25},
+      {n:"דג לבן - דניס/בקלה (פרוסה בינונית, מבושל)", k:120, p:24, sat:['protein'], meals:['lunch','dinner'], grp:'fish', prep:25},
+      {n:"טונה משומרת במים (קופסה מסוננת)", k:130, p:29, sat:['protein'], meals:['lunch','snack'], grp:'fish', prep:2},
+      {n:"קוטג'/גבינה לבנה 5% (כוס)", k:200, p:25, sat:['protein'], meals:['breakfast','snack'], grp:'dairy', prep:1},
+      {n:"יוגורט יווני טבעי 5% (כוס)", k:220, p:20, sat:['protein'], meals:['breakfast','snack'], grp:'dairy', prep:1},
+      {n:"טופו מוקפץ (כוס קוביות)", k:120, p:12, sat:['protein'], meals:['lunch','dinner'], grp:'soy', prep:15},
     ],
     yellow: [
-      {n:"פרוסת לחם מלא/כוסמין", k:90, p:4, sat:['carb']},
-      {n:"פיתה מלאה בינונית", k:170, p:6, sat:['carb']},
-      {n:"כוס קינואה מבושלת (לא יבשה)", k:220, p:8, sat:['carb']},
-      {n:"כוס אורז מלא מבושל (לא יבש)", k:215, p:5, sat:['carb']},
-      {n:"כוס בטטה מבושלת בקוביות", k:180, p:4, sat:['carb']},
-      {n:"חצי כוס שיבולת שועל יבשה (לפני בישול)", k:150, p:5, sat:['carb']},
-      {n:"כוס עדשים מבושלות (לא יבשות)", k:230, p:18, sat:['carb','protein']},
-      {n:"כוס חומוס מבושל/משומר", k:270, p:15, sat:['carb','protein']},
-      {n:"כוס פירות יער (אוכמניות/תותים)", k:80, p:1, sat:['carb']},
-      {n:"תפוח בינוני", k:95, p:0, sat:['carb']},
-      {n:"בננה בינונית", k:105, p:1, sat:['carb']},
-      {n:"רבע כוס שקדים/אגוזים (חופן)", k:170, p:6, sat:['carb']},
-      {n:"כף טחינה גולמית", k:90, p:3, sat:['carb']},
-      {n:"כף שמן זית", k:120, p:0, sat:['carb']},
-      {n:"רבע אבוקדו בינוני", k:80, p:1, sat:['carb']},
+      {n:"פרוסת לחם מלא/כוסמין", k:90, p:4, sat:['carb'], meals:['breakfast','snack'], grp:'grain', prep:1},
+      {n:"פיתה מלאה בינונית", k:170, p:6, sat:['carb'], meals:['lunch','dinner'], grp:'grain', prep:1},
+      {n:"כוס קינואה מבושלת (לא יבשה)", k:220, p:8, sat:['carb'], meals:['lunch','dinner'], grp:'grain', prep:20},
+      {n:"כוס אורז מלא מבושל (לא יבש)", k:215, p:5, sat:['carb'], meals:['lunch','dinner'], grp:'grain', prep:25},
+      {n:"כוס בטטה מבושלת בקוביות", k:180, p:4, sat:['carb'], meals:['lunch','dinner'], grp:'veg', prep:30},
+      {n:"חצי כוס שיבולת שועל יבשה (לפני בישול)", k:150, p:5, sat:['carb'], meals:['breakfast'], grp:'grain', prep:8},
+      {n:"כוס עדשים מבושלות (לא יבשות)", k:230, p:18, sat:['carb','protein'], meals:['lunch','dinner'], grp:'legumes', prep:25},
+      {n:"כוס חומוס מבושל/משומר", k:270, p:15, sat:['carb','protein'], meals:['lunch','dinner','snack'], grp:'legumes', prep:5},
+      {n:"כוס פירות יער (אוכמניות/תותים)", k:80, p:1, sat:['carb'], meals:['breakfast','snack'], grp:'fruit', prep:1},
+      {n:"תפוח בינוני", k:95, p:0, sat:['carb'], meals:['snack'], grp:'fruit', prep:1},
+      {n:"בננה בינונית", k:105, p:1, sat:['carb'], meals:['breakfast','snack'], grp:'fruit', prep:1},
+      {n:"רבע כוס שקדים/אגוזים (חופן)", k:170, p:6, sat:['carb'], meals:['snack'], grp:'nuts', prep:1},
+      {n:"כף טחינה גולמית", k:90, p:3, sat:['carb'], meals:['lunch','dinner'], grp:'sesame', prep:1},
+      {n:"כף שמן זית", k:120, p:0, sat:['carb'], meals:['lunch','dinner'], grp:'fat', prep:1},
+      {n:"רבע אבוקדו בינוני", k:80, p:1, sat:['carb'], meals:['breakfast','lunch'], grp:'fat', prep:2},
     ],
     treat: [
-      {n:"פרוסת עוגה ביתית קטנה", k:250, p:3, sat:[]},
-      {n:"כוס משקה ממותק/מיץ", k:140, p:0, sat:[]},
-      {n:"חטיף/צ'יפס (מנה קטנה, כ-30 גרם)", k:160, p:2, sat:[]},
-      {n:"כוס פסטה/אורז לבן מבושל", k:210, p:6, sat:[]},
-      {n:"כף דבש/סילאן", k:65, p:0, sat:[]},
+      {n:"פרוסת עוגה ביתית קטנה", k:250, p:3, sat:[], meals:['snack'], grp:'sweet', prep:1},
+      {n:"כוס משקה ממותק/מיץ", k:140, p:0, sat:[], meals:['snack'], grp:'sweet', prep:1},
+      {n:"חטיף/צ'יפס (מנה קטנה, כ-30 גרם)", k:160, p:2, sat:[], meals:['snack'], grp:'sweet', prep:1},
+      {n:"כוס פסטה/אורז לבן מבושל", k:210, p:6, sat:[], meals:['lunch','dinner'], grp:'grain', prep:15},
+      {n:"כף דבש/סילאן", k:65, p:0, sat:[], meals:['breakfast','snack'], grp:'sweet', prep:1},
     ],
     choco: [
-      {n:"2-3 קוביות שוקולד מריר 70%+ (כ-20-30 גרם)", k:140, p:2, sat:['choco']},
+      {n:"2-3 קוביות שוקולד מריר 70%+ (כ-20-30 גרם)", k:140, p:2, sat:['choco'], meals:['snack'], grp:'sweet', prep:1},
     ]
   };
   const CAT_LABELS = { green:"ירקות וחלבון 🟢", yellow:"פחמימה ושומן 🟡", treat:"פינוק 🍟", choco:"שוקולד 🍫" };
+  const MEAL_LABELS = { all:"הכל", breakfast:"בוקר 🌅", lunch:"צהריים ☀️", dinner:"ערב 🌙", snack:"נשנוש 🍎" };
+  const DISLIKE_GROUPS = { egg:"ביצים", fish:"דגים", dairy:"מוצרי חלב", meat:"בשר/עוף", legumes:"קטניות", nuts:"אגוזים", soy:"סויה" };
+
+  function currentPrefs(){ return state.profile.prefs || { dislikes:[], quickOnly:false }; }
+  function passesPrefs(f){
+    const prefs = currentPrefs();
+    if(prefs.dislikes && prefs.dislikes.includes(f.grp)) return false;
+    if(prefs.quickOnly && f.prep && f.prep > 10) return false;
+    return true;
+  }
+  function inferMealFromTime(){
+    const h = new Date().getHours();
+    if(h < 11) return 'breakfast';
+    if(h < 16) return 'lunch';
+    if(h < 21) return 'dinner';
+    return 'snack';
+  }
 
   // ---------- CALORIE CALC ----------
   function calcTarget(){
@@ -568,11 +611,17 @@
     const items = state.logs[key];
     const el = document.getElementById('logList');
     if(items.length===0){ el.innerHTML = '<div class="empty">עוד לא הוספת כלום היום — התחילי מהכפתורים למעלה 👆</div>'; return; }
-    el.innerHTML = items.map(it=>`
-      <div class="log-item">
-        <span>${it.n} <span class="small-muted">· ${it.k} קק"ל</span></span>
-        <button class="del" data-id="${it.id}">✕</button>
-      </div>`).join('');
+    const order = ['breakfast','lunch','dinner','snack'];
+    const groups = {};
+    items.forEach(it=>{ const m = it.meal && order.includes(it.meal) ? it.meal : 'snack'; (groups[m]=groups[m]||[]).push(it); });
+    el.innerHTML = order.filter(m=>groups[m]).map(m=>`
+      <div class="small-muted" style="font-weight:700; margin:8px 0 2px;">${MEAL_LABELS[m]}</div>
+      ${groups[m].map(it=>`
+        <div class="log-item">
+          <span>${it.n} <span class="small-muted">· ${it.k} קק"ל</span></span>
+          <button class="del" data-id="${it.id}">✕</button>
+        </div>`).join('')}
+    `).join('');
     el.querySelectorAll('.del').forEach(b=>{
       b.onclick = ()=>{
         state.logs[key] = state.logs[key].filter(x=>x.id!==b.dataset.id);
@@ -582,7 +631,18 @@
   }
 
   let activeCat = 'green';
+  let activeMeal = 'all';
+  function renderMealTabs(){
+    const tabsEl = document.getElementById('mealTabs');
+    tabsEl.innerHTML = Object.keys(MEAL_LABELS).map(m=>
+      `<div class="cat-chip ${m===activeMeal?'active':''}" data-meal="${m}">${MEAL_LABELS[m]}</div>`
+    ).join('');
+    tabsEl.querySelectorAll('.cat-chip').forEach(el=>{
+      el.onclick = ()=>{ activeMeal = el.dataset.meal; renderFoodPicker(); };
+    });
+  }
   function renderFoodPicker(){
+    renderMealTabs();
     const tabsEl = document.getElementById('catTabs');
     tabsEl.innerHTML = Object.keys(FOOD_DB).map(c=>
       `<div class="cat-chip ${c===activeCat?'active':''}" data-cat="${c}">${CAT_LABELS[c]}</div>`
@@ -591,25 +651,49 @@
       el.onclick = ()=>{ activeCat = el.dataset.cat; renderFoodPicker(); };
     });
     const grid = document.getElementById('foodGrid');
-    grid.innerHTML = FOOD_DB[activeCat].map((f,idx)=>
+    const items = FOOD_DB[activeCat]
+      .map((f,idx)=>({f,idx}))
+      .filter(({f})=> (activeMeal==='all' || (f.meals && f.meals.includes(activeMeal))) && passesPrefs(f));
+    grid.innerHTML = items.length ? items.map(({f,idx})=>
       `<button class="food-btn" data-cat="${activeCat}" data-idx="${idx}"><span class="fn">${f.n}</span><span class="fk">~${f.k} קק"ל</span></button>`
-    ).join('');
+    ).join('') : '<div class="empty">אין פריטים שמתאימים לסינון הנוכחי בקטגוריה הזו.</div>';
     grid.querySelectorAll('.food-btn').forEach(btn=>{
       btn.onclick = ()=>{
         const f = FOOD_DB[btn.dataset.cat][btn.dataset.idx];
-        addFood(f.n, f.k, f.p, f.sat);
+        addFood(f.n, f.k, f.p, f.sat, activeMeal==='all' ? inferMealFromTime() : activeMeal);
       };
     });
   }
 
-  function addFood(name, kcal, protein, sat){
+  function addFood(name, kcal, protein, sat, meal){
     const key = todayKey(); ensureDay(key);
-    state.logs[key].push({ id: Date.now()+"", n:name, k:kcal, p:protein||0, t: new Date().toTimeString().slice(0,5) });
+    state.logs[key].push({ id: Date.now()+"", n:name, k:kcal, p:protein||0, t: new Date().toTimeString().slice(0,5), meal: meal || inferMealFromTime() });
     (sat||[]).forEach(s=>{ state.checklist[key][s] = true; });
     updateStreak();
     save();
     renderDashboard();
   }
+
+  // ---------- SUGGESTED MENU (סינון פשוט לפי העדפות, בלי AI) ----------
+  function suggestMenu(){
+    const order = ['breakfast','lunch','dinner','snack'];
+    const all = Object.values(FOOD_DB).flat();
+    const rows = order.map(m=>{
+      const opts = all.filter(f=> f.meals && f.meals.includes(m) && passesPrefs(f));
+      if(opts.length===0) return '';
+      const pick = opts[Math.floor(Math.random()*opts.length)];
+      return `<div class="log-item">
+        <span><b>${MEAL_LABELS[m]}</b> — ${pick.n} <span class="small-muted">· ${pick.k} קק"ל</span></span>
+        <button class="ghost menu-add" data-n="${pick.n}" data-k="${pick.k}" data-p="${pick.p}" data-meal="${m}">+ הוספה</button>
+      </div>`;
+    }).join('');
+    const el = document.getElementById('menuSuggestList');
+    el.innerHTML = rows || '<div class="empty">כרגע אין הצעות שעוברות את ההעדפות שלך — נסי להסיר סינון בהגדרות.</div>';
+    el.querySelectorAll('.menu-add').forEach(btn=>{
+      btn.onclick = ()=> addFood(btn.dataset.n, parseInt(btn.dataset.k,10), parseInt(btn.dataset.p,10), [], btn.dataset.meal);
+    });
+  }
+  document.getElementById('reshuffleMenu').onclick = suggestMenu;
 
   // ---------- EXERCISE ----------
   function renderExercise(key){
@@ -633,15 +717,30 @@
   };
 
   // ---------- WATER ----------
-  function renderWater(key){ document.getElementById('waterCount').textContent = state.water[key]||0; }
+  function waterGoalMl(){ return Math.round((state.profile.weight*30)/50)*50; }
+  function currentWaterUnitMl(){ return (state.profile.waterUnit==='bottle') ? 500 : 250; }
+  function renderWater(key){
+    const ml = state.water[key]||0;
+    document.getElementById('waterCount').textContent = (ml/1000).toFixed(2);
+    document.getElementById('waterGoalTxt').textContent = `יעד: ${(waterGoalMl()/1000).toFixed(1)} ליטר`;
+    document.querySelectorAll('.water-unit-chip').forEach(el=>{
+      el.classList.toggle('active', el.dataset.unit === (state.profile.waterUnit||'cup'));
+    });
+  }
   document.getElementById('waterPlus').onclick = ()=>{
     const key = todayKey(); ensureDay(key);
-    state.water[key] = Math.min(12,(state.water[key]||0)+1); save(); renderWater(key);
+    state.water[key] = Math.min(6000,(state.water[key]||0)+currentWaterUnitMl()); save(); renderWater(key);
   };
   document.getElementById('waterMinus').onclick = ()=>{
     const key = todayKey(); ensureDay(key);
-    state.water[key] = Math.max(0,(state.water[key]||0)-1); save(); renderWater(key);
+    state.water[key] = Math.max(0,(state.water[key]||0)-currentWaterUnitMl()); save(); renderWater(key);
   };
+  document.querySelectorAll('.water-unit-chip').forEach(el=>{
+    el.onclick = ()=>{
+      state.profile.waterUnit = el.dataset.unit;
+      save(); renderWater(todayKey());
+    };
+  });
 
   // ---------- CUSTOM MODAL ----------
   const customModal = document.getElementById('customModal');
@@ -663,6 +762,38 @@
     box.innerHTML = state.chat.map(m=>`<div class="bubble ${m.role}">${m.text}</div>`).join('');
     box.scrollTop = box.scrollHeight;
   }
+  // ---------- LEARNING PROFILE (מכירה את לירון לאורך זמן, לא רק היום) ----------
+  function buildLearningProfile(){
+    const dates = Object.keys(state.logs).sort();
+    const last7 = dates.slice(-7);
+    let totalK=0, activeDays=0, totalWaterMl=0, waterDaysCount=0;
+    last7.forEach(k=>{
+      const items = state.logs[k]||[];
+      if(items.length){ activeDays++; totalK += items.reduce((s,i)=>s+i.k,0); }
+      if(state.water[k]!==undefined && state.water[k]>0){ totalWaterMl += state.water[k]; waterDaysCount++; }
+    });
+    const strengthLast7 = last7.filter(k=>state.exercise[k]&&state.exercise[k].strength).length;
+    const walkLast7 = last7.filter(k=>state.exercise[k]&&state.exercise[k].walk).length;
+    const weights = state.checkins.filter(c=>c.weight).map(c=>c.weight);
+    let weightTrend = 'אין עדיין מספיק נתונים';
+    if(weights.length>=2){
+      const diff = weights[weights.length-1]-weights[0];
+      weightTrend = diff < -0.3 ? `יורד (${diff.toFixed(1)} ק"ג מאז תחילת המעקב)` : diff > 0.3 ? `עולה (${diff.toFixed(1)}+ ק"ג)` : 'יציב בערך';
+    }
+    return {
+      daysLoggedLast7: activeDays,
+      avgDailyCaloriesLast7: activeDays ? Math.round(totalK/activeDays) : null,
+      avgWaterMlOnLoggedDays: waterDaysCount ? Math.round(totalWaterMl/waterDaysCount) : null,
+      strengthWorkoutsLast7Days: strengthLast7,
+      walksLast7Days: walkLast7,
+      weightTrendSinceTrackingStarted: weightTrend,
+      totalCheckinsCompleted: state.checkins.length,
+      currentStreakDays: state.streak.count,
+      dislikedFoodGroups: (state.profile.prefs && state.profile.prefs.dislikes) || [],
+      recentQuestionsSheAsked: state.chat.filter(m=>m.role==='user').slice(-10).map(m=>m.text)
+    };
+  }
+
   function buildContext(){
     const key = todayKey(); ensureDay(key);
     const target = calcTarget();
@@ -672,7 +803,8 @@
       framework: "שיטת הצלחת: חצי ירקות, רבע חלבון, רבע פחמימה מורכבת. שוקולד מריר 70%+ 20-30 גרם מותר כל יום. בלי שקילת אוכל, בלי שיפוטיות, כלל 90/10.",
       today: { consumed, target, left: target-consumed, checklist: state.checklist[key], exercise: state.exercise[key] },
       lastCheckin: lastCheckin || null,
-      streak: state.streak.count
+      streak: state.streak.count,
+      learningProfile: buildLearningProfile()
     };
   }
   async function sendChat(text){
@@ -778,13 +910,38 @@
   }
 
   // ---------- SETTINGS ----------
+  function renderDislikeChips(){
+    const el = document.getElementById('dislikeChips');
+    const prefs = currentPrefs();
+    el.innerHTML = Object.keys(DISLIKE_GROUPS).map(g=>
+      `<button class="cat-chip dislike-chip ${prefs.dislikes.includes(g)?'active':''}" data-grp="${g}">${DISLIKE_GROUPS[g]}</button>`
+    ).join('');
+    el.querySelectorAll('.dislike-chip').forEach(btn=>{
+      btn.onclick = ()=>{
+        const g = btn.dataset.grp;
+        const p = currentPrefs();
+        if(p.dislikes.includes(g)) p.dislikes = p.dislikes.filter(x=>x!==g);
+        else p.dislikes.push(g);
+        state.profile.prefs = p;
+        save(); renderDislikeChips(); renderFoodPicker(); suggestMenu();
+      };
+    });
+  }
+
   function loadSettingsForm(){
     document.getElementById('setWeight').value = state.profile.weight;
     document.getElementById('setHeight').value = state.profile.height;
     document.getElementById('setAge').value = state.profile.age;
     document.getElementById('setActivity').value = state.profile.activity;
     document.getElementById('setDeficit').value = state.profile.deficit;
+    document.getElementById('setQuickOnly').checked = !!currentPrefs().quickOnly;
+    renderDislikeChips();
   }
+  document.getElementById('setQuickOnly').addEventListener('change', e=>{
+    state.profile.prefs = currentPrefs();
+    state.profile.prefs.quickOnly = e.target.checked;
+    save(); renderFoodPicker(); suggestMenu();
+  });
   document.getElementById('saveProfile').onclick = ()=>{
     state.profile.weight = parseFloat(document.getElementById('setWeight').value)||state.profile.weight;
     state.profile.height = parseFloat(document.getElementById('setHeight').value)||state.profile.height;
@@ -822,6 +979,7 @@
     renderHeader();
     renderFoodPicker();
     renderDashboard();
+    suggestMenu();
     renderChat();
     renderProgress();
     loadSettingsForm();
