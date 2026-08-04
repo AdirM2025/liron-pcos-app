@@ -1,0 +1,17 @@
+{
+  "name": "המסע של לירון · PCOS",
+  "short_name": "המסע שלי",
+  "description": "ליווי יומיומי בתזונה ואורח חיים לניהול PCOS",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#FFF9F7",
+  "theme_color": "#E8607A",
+  "orientation": "portrait",
+  "dir": "rtl",
+  "lang": "he",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

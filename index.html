@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>המסע של לירון · PCOS</title>
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#E8607A">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="המסע שלי">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
@@ -36,8 +42,9 @@
   .hero .sub{opacity:.92; font-size:13.5px; margin-bottom:14px;}
   .streak{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.22);padding:6px 12px;border-radius:100px;font-size:13px;font-weight:600;}
 
-  .tabs{display:flex; gap:6px; margin:16px 0 14px; background:#fff; padding:5px; border-radius:14px; box-shadow:var(--shadow);}
-  .tab{flex:1; text-align:center; padding:9px 4px; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer; color:var(--navy-soft); transition:.15s;}
+  .tabs{display:flex; gap:6px; margin:16px 0 14px; background:#fff; padding:5px; border-radius:14px; box-shadow:var(--shadow); overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none;}
+  .tabs::-webkit-scrollbar{display:none;}
+  .tab{flex:1 0 auto; min-width:60px; text-align:center; padding:9px 8px; border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer; color:var(--navy-soft); transition:.15s; white-space:nowrap;}
   .tab.active{background:var(--rose); color:#fff;}
   .page{display:none;}
   .page.active{display:block; animation:fade .25s ease;}
@@ -134,6 +141,19 @@
   .footnote{font-size:11px; color:var(--navy-soft); text-align:center; line-height:1.6; margin-top:6px; padding:0 10px;}
   .divider{height:1px; background:var(--border); margin:14px 0;}
   .small-muted{font-size:11.5px; color:var(--navy-soft);}
+
+  .celebrate-overlay{position:fixed; inset:0; background:rgba(35,51,72,0.55); display:flex; align-items:center; justify-content:center; z-index:200; opacity:0; pointer-events:none; transition:opacity .25s;}
+  .celebrate-overlay.show{opacity:1; pointer-events:auto;}
+  .celebrate-card{background:#fff; border-radius:22px; padding:28px 26px; text-align:center; max-width:280px; box-shadow:0 12px 40px rgba(35,51,72,0.28); transform:scale(.82); transition:transform .32s cubic-bezier(.34,1.56,.64,1);}
+  .celebrate-overlay.show .celebrate-card{transform:scale(1);}
+  .celebrate-card .emoji{font-size:42px; display:block; margin-bottom:10px;}
+  .celebrate-card h3{margin:0 0 6px; font-size:17px; color:var(--rose-dark);}
+  .celebrate-card p{margin:0; font-size:13px; color:var(--navy-soft); line-height:1.5;}
+  .celebrate-particle{position:fixed; font-size:20px; z-index:199; pointer-events:none; animation:celebrate-fall 1.7s ease-in forwards; top:-24px;}
+  @keyframes celebrate-fall{0%{transform:translateY(0) rotate(0deg); opacity:1;} 100%{transform:translateY(90vh) rotate(360deg); opacity:0;}}
+
+  .hardday-btn{width:100%; margin-top:14px; background:var(--navy); color:#fff; border:none; border-radius:14px; padding:13px 16px; font-weight:700; font-size:13.5px; cursor:pointer; font-family:inherit; display:flex; align-items:center; justify-content:center; gap:8px; opacity:.92; transition:opacity .15s;}
+  .hardday-btn:active{opacity:1;}
 </style>
 </head>
 <body>
@@ -145,9 +165,12 @@
     <div class="streak">🔥 <span id="streakTxt">0 ימים ברצף</span></div>
   </div>
 
+  <button class="hardday-btn" id="hardDayBtn">🫂 היה לי יום קשה</button>
+
   <div class="tabs">
     <div class="tab active" data-page="dashboard">היום</div>
     <div class="tab" data-page="chat">שאלי אותי</div>
+    <div class="tab" data-page="weekmenu">תפריט שבועי</div>
     <div class="tab" data-page="progress">התקדמות</div>
     <div class="tab" data-page="guide">המדריך שלי</div>
     <div class="tab" data-page="settings">הגדרות</div>
@@ -246,6 +269,16 @@
     </div>
   </div>
 
+  <!-- WEEKLY MENU -->
+  <div class="page" id="page-weekmenu">
+    <div class="card">
+      <h2>תפריט מוצע לשבוע 🍽 <span class="muted">— 7 ימים קדימה, לפי ההעדפות שלך</span></h2>
+      <p class="small-muted" style="margin-top:-4px;">רעיון לתכנון מראש - לא חובה להיצמד אליו מדויק, זה כלי עזר בלבד.</p>
+      <button class="primary" id="generateWeeklyMenu">🔀 יצירת תפריט שבועי חדש</button>
+    </div>
+    <div id="weeklyMenuList"></div>
+  </div>
+
   <!-- PROGRESS -->
   <div class="page" id="page-progress">
     <div class="card">
@@ -263,6 +296,23 @@
       <h2>מגמת משקל</h2>
       <div style="height:180px;"><canvas id="weightChart"></canvas></div>
       <p class="footnote">אצל נשים עם PCOS המשקל לא תמיד יורד בקו ישר — זה נורמלי, לא כישלון.</p>
+    </div>
+
+    <div class="card">
+      <h2>קלוריות - 14 הימים האחרונים</h2>
+      <div style="height:160px;"><canvas id="caloriesChart"></canvas></div>
+    </div>
+
+    <div class="card">
+      <h2>מים וצעדים - 14 הימים האחרונים</h2>
+      <div style="height:130px; margin-bottom:14px;"><canvas id="waterChart"></canvas></div>
+      <div style="height:130px;"><canvas id="stepsChart"></canvas></div>
+    </div>
+
+    <div class="card">
+      <h2>מגמת אנרגיה, תשוקות ושינה</h2>
+      <div style="height:170px;"><canvas id="moodChart"></canvas></div>
+      <p class="footnote">מבוסס על הצ'ק-אינים השבועיים שמילאת. ככל שיהיו יותר, המגמה תהיה ברורה יותר.</p>
     </div>
 
     <div class="card">
@@ -474,7 +524,11 @@
       steps:{},
       checkins:[],
       chat:[],
-      streak:{ lastDate:null, count:0 }
+      streak:{ lastDate:null, count:0 },
+      celebratedMilestones:[],
+      celebratedWaterDays:{},
+      hardDays:{},
+      weeklyMenu:null
     };
   }
   let state = load();
@@ -487,6 +541,31 @@
     }catch(e){ return defaultState(); }
   }
   function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+
+  // ---------- CELEBRATION (חגיגת ניצחונות) ----------
+  function celebrate(emoji, title, subtitle){
+    const particles = ['🎉','✨','💗','🌟','🎊'];
+    for(let i=0;i<14;i++){
+      const p = document.createElement('div');
+      p.className = 'celebrate-particle';
+      p.textContent = particles[Math.floor(Math.random()*particles.length)];
+      p.style.left = (Math.random()*94) + 'vw';
+      p.style.animationDelay = (Math.random()*0.4) + 's';
+      document.body.appendChild(p);
+      setTimeout(()=> p.remove(), 2300);
+    }
+    const overlay = document.createElement('div');
+    overlay.className = 'celebrate-overlay';
+    overlay.innerHTML = `<div class="celebrate-card"><span class="emoji">${emoji}</span><h3>${title}</h3><p>${subtitle||''}</p></div>`;
+    document.body.appendChild(overlay);
+    requestAnimationFrame(()=> overlay.classList.add('show'));
+    function closeCelebrate(){
+      overlay.classList.remove('show');
+      setTimeout(()=> overlay.remove(), 300);
+    }
+    overlay.onclick = closeCelebrate;
+    setTimeout(closeCelebrate, 2600);
+  }
 
   function ensureDay(key){
     if(!state.logs[key]) state.logs[key] = [];
@@ -599,6 +678,18 @@
     else { state.streak.count = 1; }
     state.streak.lastDate = key;
     save();
+    checkStreakMilestone();
+  }
+
+  function checkStreakMilestone(){
+    const milestones = [3,7,14,30,60,100,180,365];
+    if(!state.celebratedMilestones) state.celebratedMilestones = [];
+    const count = state.streak.count;
+    if(milestones.includes(count) && !state.celebratedMilestones.includes(count)){
+      state.celebratedMilestones.push(count);
+      save();
+      celebrate('🔥', `${count} ימים ברצף!`, 'התמדה אמיתית - זה לא קטן בכלל, את מדהימה 💪');
+    }
   }
 
   function renderDashboard(){
@@ -709,37 +800,37 @@
 
   // ---------- SUGGESTED MENU (סינון פשוט לפי העדפות, בלי AI) ----------
   // לארוחות עיקריות בונים "צלחת" אמיתית: ירק/חלבון + פחמימה + שומן, לא פריט בודד אקראי.
+  // buildMealPlan משמש גם את ההצעה היומית וגם את התפריט השבועי.
   function pickRandom(list){ return list.length ? list[Math.floor(Math.random()*list.length)] : null; }
 
-  function suggestMenu(){
+  function buildMealPlan(m){
     const all = Object.values(FOOD_DB).flat();
-    const byMeal = (m) => all.filter(f=> f.meals && f.meals.includes(m) && passesPrefs(f));
+    const pool = all.filter(f=> f.meals && f.meals.includes(m) && passesPrefs(f));
     const withTag = (list, tag) => list.filter(f=> f.sat && f.sat.includes(tag));
     const withGrp = (list, grp) => list.filter(f=> f.grp===grp);
-
-    function planFor(m){
-      const pool = byMeal(m);
-      if(m === 'snack'){
-        const item = pickRandom(pool);
-        return item ? [item] : [];
-      }
-      const proteinPool = withTag(pool,'protein').length ? withTag(pool,'protein') : withTag(pool,'veg');
-      const protein = pickRandom(proteinPool);
-      const carb = pickRandom(withTag(pool,'carb'));
-      const parts = [protein, carb].filter(Boolean);
-      if(m === 'lunch' || m === 'dinner'){
-        const veg = pickRandom(withTag(pool,'veg').filter(f=>f!==protein));
-        const fat = pickRandom(withGrp(pool,'fat'));
-        if(veg) parts.unshift(veg);
-        if(fat) parts.push(fat);
-      }
-      const seen = new Set();
-      return parts.filter(f=>{ if(!f || seen.has(f.n)) return false; seen.add(f.n); return true; });
+    if(m === 'snack'){
+      const item = pickRandom(pool);
+      return item ? [item] : [];
     }
+    const proteinPool = withTag(pool,'protein').length ? withTag(pool,'protein') : withTag(pool,'veg');
+    const protein = pickRandom(proteinPool);
+    const carb = pickRandom(withTag(pool,'carb'));
+    const parts = [protein, carb].filter(Boolean);
+    if(m === 'lunch' || m === 'dinner'){
+      const veg = pickRandom(withTag(pool,'veg').filter(f=>f!==protein));
+      const fat = pickRandom(withGrp(pool,'fat'));
+      if(veg) parts.unshift(veg);
+      if(fat) parts.push(fat);
+    }
+    const seen = new Set();
+    return parts.filter(f=>{ if(!f || seen.has(f.n)) return false; seen.add(f.n); return true; });
+  }
 
-    const order = ['breakfast','lunch','dinner','snack'];
-    const html = order.map(m=>{
-      const items = planFor(m);
+  const MEAL_ORDER = ['breakfast','lunch','dinner','snack'];
+
+  function suggestMenu(){
+    const html = MEAL_ORDER.map(m=>{
+      const items = buildMealPlan(m);
       if(items.length===0) return '';
       const rows = items.map(f=>`
         <div class="log-item">
@@ -755,6 +846,49 @@
     });
   }
   document.getElementById('reshuffleMenu').onclick = suggestMenu;
+
+  // ---------- WEEKLY MENU (תפריט מלא ל-7 ימים קדימה, לצפייה בלבד) ----------
+  function generateWeeklyMenu(){
+    const days = [];
+    for(let i=0;i<7;i++){
+      const d = new Date(); d.setDate(d.getDate()+i);
+      const dayPlan = {};
+      MEAL_ORDER.forEach(m=>{ dayPlan[m] = buildMealPlan(m).map(f=>({n:f.n, k:f.k})); });
+      days.push({ date: d.toISOString().slice(0,10), plan: dayPlan });
+    }
+    state.weeklyMenu = { generatedAt: todayKey(), days };
+    save();
+    renderWeeklyMenu();
+  }
+
+  function fmtDateHeShort(dateStr){
+    const days=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+    const months=['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+    const d = new Date(dateStr+'T00:00:00');
+    return `יום ${days[d.getDay()]}, ${d.getDate()} ב${months[d.getMonth()]}`;
+  }
+
+  function renderWeeklyMenu(){
+    const el = document.getElementById('weeklyMenuList');
+    if(!el) return;
+    if(!state.weeklyMenu){
+      el.innerHTML = '<div class="empty">עדיין לא נוצר תפריט שבועי — לחצי על הכפתור למעלה כדי ליצור אחד 👆</div>';
+      return;
+    }
+    el.innerHTML = state.weeklyMenu.days.map((day, idx)=>{
+      const rows = MEAL_ORDER.map(m=>{
+        const items = day.plan[m] || [];
+        if(items.length===0) return '';
+        const list = items.map(f=>`${f.n} <span class="small-muted">(${f.k} קק"ל)</span>`).join(' + ');
+        return `<div class="log-item"><span><b>${MEAL_LABELS[m]}</b> — ${list}</span></div>`;
+      }).join('');
+      return `<div class="card" style="box-shadow:none; border:1px solid var(--border); margin-bottom:10px;">
+        <h2 style="font-size:14px;">${idx===0 ? 'היום · ' : ''}${fmtDateHeShort(day.date)}</h2>
+        ${rows}
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('generateWeeklyMenu').onclick = generateWeeklyMenu;
 
   // ---------- EXERCISE ----------
   function renderExercise(key){
@@ -790,7 +924,17 @@
   }
   document.getElementById('waterPlus').onclick = ()=>{
     const key = todayKey(); ensureDay(key);
-    state.water[key] = Math.min(6000,(state.water[key]||0)+currentWaterUnitMl()); save(); renderWater(key);
+    const before = state.water[key]||0;
+    const goal = waterGoalMl();
+    state.water[key] = Math.min(6000, before + currentWaterUnitMl());
+    save(); renderWater(key);
+    if(before < goal && state.water[key] >= goal){
+      if(!state.celebratedWaterDays) state.celebratedWaterDays = {};
+      if(!state.celebratedWaterDays[key]){
+        state.celebratedWaterDays[key] = true; save();
+        celebrate('💧', 'הגעת ליעד המים היום!', 'הגוף שלך אוהב אותך על זה 💗');
+      }
+    }
   };
   document.getElementById('waterMinus').onclick = ()=>{
     const key = todayKey(); ensureDay(key);
@@ -871,6 +1015,7 @@
       totalCheckinsCompleted: state.checkins.length,
       currentStreakDays: state.streak.count,
       dislikedFoodGroups: (state.profile.prefs && state.profile.prefs.dislikes) || [],
+      hardDaysLast7: last7.filter(k=>state.hardDays && state.hardDays[k]).length,
       recentQuestionsSheAsked: state.chat.filter(m=>m.role==='user').slice(-10).map(m=>m.text)
     };
   }
@@ -926,6 +1071,19 @@
     }
   };
 
+  // ---------- HARD DAY (תמיכה בימים קשים/נפילות) ----------
+  document.getElementById('hardDayBtn').onclick = ()=>{
+    const key = todayKey();
+    if(!state.hardDays) state.hardDays = {};
+    state.hardDays[key] = (state.hardDays[key]||0) + 1;
+    save();
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.querySelector('.tab[data-page="chat"]').classList.add('active');
+    document.getElementById('page-chat').classList.add('active');
+    sendChat('היה לי יום ממש קשה היום עם האוכל או המוטיבציה, ואני מרגישה שנכשלתי. תעזרי לי להתמודד עם זה בלי שיפוטיות, ותזכירי לי שמחר זו התחלה חדשה.');
+  };
+
   // ---------- CHECK-IN ----------
   const checkinModal = document.getElementById('checkinModal');
   document.getElementById('openCheckin').onclick = ()=> checkinModal.classList.add('show');
@@ -947,10 +1105,20 @@
       note: document.getElementById('ciNote').value.trim()
     };
     state.checkins.push(entry);
-    if(entry.weight){ state.profile.weight = entry.weight; }
+    let isNewBest = false;
+    const prevWeights = state.checkins.slice(0,-1).filter(c=>c.weight).map(c=>c.weight);
+    if(entry.weight){
+      state.profile.weight = entry.weight;
+      if(prevWeights.length && entry.weight < Math.min(...prevWeights)) isNewBest = true;
+    }
     save();
     checkinModal.classList.remove('show');
     renderProgress();
+    if(isNewBest){
+      celebrate('🏆', 'שיא אישי חדש!', 'המשקל הנמוך ביותר שתועד עד כה - כל הכבוד 💗');
+    } else {
+      celebrate('📝', 'צ׳ק-אין הושלם!', 'לקחת רגע לעצור ולהקשיב לעצמך - זה חשוב.');
+    }
     await generateReflection(entry);
   };
 
@@ -969,7 +1137,12 @@
     }
   }
 
-  let weightChart;
+  let weightChart, caloriesChart, waterChart, stepsChart, moodChart;
+  function last14Dates(){
+    const arr = [];
+    for(let i=13;i>=0;i--){ const d = new Date(); d.setDate(d.getDate()-i); arr.push(d.toISOString().slice(0,10)); }
+    return arr;
+  }
   function renderProgress(){
     const points = state.checkins.filter(c=>c.weight);
     const ctxEl = document.getElementById('weightChart');
@@ -980,6 +1153,49 @@
       type:'line',
       data:{ labels, datasets:[{ data, borderColor:'#E8607A', backgroundColor:'rgba(232,96,122,0.12)', fill:true, tension:.35, pointRadius:4, pointBackgroundColor:'#E8607A' }] },
       options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ y:{ ticks:{ font:{size:10} } }, x:{ ticks:{ font:{size:10} } } } }
+    });
+
+    const dates14 = last14Dates();
+    const shortLabels = dates14.map(d=>d.slice(5));
+    const target = calcTarget();
+    const tinyOpts = { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ y:{ ticks:{font:{size:9}} }, x:{ ticks:{font:{size:9}} } } };
+
+    const caloriesData = dates14.map(d => (state.logs[d]||[]).reduce((s,i)=>s+i.k,0));
+    if(caloriesChart) caloriesChart.destroy();
+    caloriesChart = new Chart(document.getElementById('caloriesChart'), {
+      data:{ labels: shortLabels, datasets:[
+        { type:'bar', data: caloriesData, backgroundColor:'#F0899E', borderRadius:6 },
+        { type:'line', data: dates14.map(()=>target), borderColor:'#233348', borderDash:[5,4], pointRadius:0 }
+      ]},
+      options: tinyOpts
+    });
+
+    const waterData = dates14.map(d => Math.round(((state.water[d]||0))/1000*10)/10);
+    if(waterChart) waterChart.destroy();
+    waterChart = new Chart(document.getElementById('waterChart'), {
+      type:'bar',
+      data:{ labels: shortLabels, datasets:[{ data: waterData, backgroundColor:'#7EC8C0', borderRadius:6 }] },
+      options: tinyOpts
+    });
+
+    const stepsData = dates14.map(d => (state.steps && state.steps[d]) || 0);
+    if(stepsChart) stepsChart.destroy();
+    stepsChart = new Chart(document.getElementById('stepsChart'), {
+      type:'bar',
+      data:{ labels: shortLabels, datasets:[{ data: stepsData, backgroundColor:'#D19A2A', borderRadius:6 }] },
+      options: tinyOpts
+    });
+
+    const moodLabels = state.checkins.map(c=>c.date.slice(5));
+    if(moodChart) moodChart.destroy();
+    moodChart = new Chart(document.getElementById('moodChart'), {
+      type:'line',
+      data:{ labels: moodLabels, datasets:[
+        { data: state.checkins.map(c=>c.energy), borderColor:'#2A9D8F', tension:.3, pointRadius:3, label:'אנרגיה' },
+        { data: state.checkins.map(c=>c.cravings), borderColor:'#E8607A', tension:.3, pointRadius:3, label:'תשוקות' },
+        { data: state.checkins.map(c=>c.sleep), borderColor:'#5B6B80', tension:.3, pointRadius:3, label:'שינה' }
+      ]},
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:true, labels:{font:{size:9}, boxWidth:10}}}, scales:{ y:{ min:0, max:5, ticks:{font:{size:9}} }, x:{ ticks:{font:{size:9}} } } }
     });
 
     const wins = [];
@@ -1067,6 +1283,7 @@
     renderFoodPicker();
     renderDashboard();
     suggestMenu();
+    renderWeeklyMenu();
     renderChat();
     renderProgress();
     loadSettingsForm();
@@ -1076,6 +1293,13 @@
     }
   }
   renderAll();
+
+  // ---------- PWA: רישום Service Worker (מאפשר התקנה על מסך הבית + אופליין בסיסי) ----------
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    });
+  }
 })();
 </script>
 </body>
